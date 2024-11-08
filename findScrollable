@@ -1,0 +1,177 @@
+// ==UserScript==
+// @name         滚动框
+// @namespace    http://tampermonkey.net/
+// @version      1.0
+// @description  查找页面中可以滚动的元素
+// @author       Your name
+// @match        *://*/*
+// @grant        none
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    // 创建控制面板样式
+    const style = document.createElement('style');
+    style.textContent = `
+        .scroll-finder-panel {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            border: 1px solid #ccc;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            z-index: 9999;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .scroll-finder-panel button {
+            margin: 5px;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        .scroll-finder-list {
+            margin-top: 10px;
+        }
+        .scroll-finder-item {
+            padding: 5px;
+            margin: 2px 0;
+            cursor: pointer;
+            border: 1px solid #eee;
+        }
+        .scroll-finder-item:hover {
+            background: #f0f0f0;
+        }
+        .scroll-finder-highlight {
+            outline: 3px solid red !important;
+            background-color: rgba(255, 0, 0, 0.1) !important;
+        }
+        .scroll-controls {
+            display: flex;
+            gap: 5px;
+            margin-top: 5px;
+        }
+    `;
+    document.head.appendChild(style);
+
+    // 创建控制面板
+    const panel = document.createElement('div');
+    panel.className = 'scroll-finder-panel';
+    panel.innerHTML = `
+        <button id="findScrollable">刷新查找</button>
+        <button id="clearHighlight">清除高亮</button>
+        <div class="scroll-finder-list"></div>
+    `;
+    document.body.appendChild(panel);
+
+    let highlightedElement = null;
+    const scrollableElements = new Set();
+
+    // 判断元素是否可滚动
+    function isScrollable(element) {
+        const style = window.getComputedStyle(element);
+        const overflow = style.overflow + style.overflowY + style.overflowX;
+        const isScrollable = overflow.includes('scroll') || overflow.includes('auto');
+
+        return isScrollable && (
+            element.scrollHeight > element.clientHeight ||
+            element.scrollWidth > element.clientWidth
+        );
+    }
+
+    // 查找所有可滚动元素
+    function findScrollableElements() {
+        scrollableElements.clear();
+        const elements = document.getElementsByTagName('*');
+
+        for (const element of elements) {
+            if (isScrollable(element)) {
+                scrollableElements.add(element);
+            }
+        }
+
+        updateScrollableList();
+    }
+
+    // 创建滚动控制按钮
+    function createScrollControls(element) {
+        const controls = document.createElement('div');
+        controls.className = 'scroll-controls';
+
+        const buttons = {
+            '↑': () => element.scrollBy(0, -100),
+            '↓': () => element.scrollBy(0, 100),
+            '←': () => element.scrollBy(-100, 0),
+            '→': () => element.scrollBy(100, 0),
+            '⇈': () => element.scrollTo(0, 0),
+            '⇊': () => element.scrollTo(0, element.scrollHeight)
+        };
+
+        Object.entries(buttons).forEach(([label, action]) => {
+            const button = document.createElement('button');
+            button.textContent = label;
+            button.onclick = action;
+            controls.appendChild(button);
+        });
+
+        return controls;
+    }
+
+    // 更新可滚动元素列表
+    function updateScrollableList() {
+        const listContainer = panel.querySelector('.scroll-finder-list');
+        listContainer.innerHTML = '';
+
+        scrollableElements.forEach((element, index) => {
+            const item = document.createElement('div');
+            item.className = 'scroll-finder-item';
+
+            // 创建元素描述
+            const description = document.createElement('div');
+            description.textContent = `${element.tagName.toLowerCase()}` +
+                (element.id ? ` #${element.id}` : '') +
+                (element.className ? ` .${element.className.split(' ').join('.')}` : '');
+
+            item.appendChild(description);
+
+            // 添加滚动控制按钮
+            item.appendChild(createScrollControls(element));
+
+            item.onclick = (e) => {
+                if (e.target === item || e.target === description) {
+                    highlightElement(element);
+                }
+            };
+
+            listContainer.appendChild(item);
+        });
+    }
+
+    // 高亮显示元素
+    function highlightElement(element) {
+        if (highlightedElement) {
+            highlightedElement.classList.remove('scroll-finder-highlight');
+        }
+
+        element.classList.add('scroll-finder-highlight');
+        highlightedElement = element;
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    // 清除高亮
+    function clearHighlight() {
+        if (highlightedElement) {
+            highlightedElement.classList.remove('scroll-finder-highlight');
+            highlightedElement = null;
+        }
+    }
+
+    // 绑定事件
+    document.getElementById('findScrollable').onclick = findScrollableElements;
+    document.getElementById('clearHighlight').onclick = clearHighlight;
+
+    // 初始查找
+    findScrollableElements();
+})();
